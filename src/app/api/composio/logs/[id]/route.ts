@@ -7,7 +7,8 @@ export async function GET(
   ctx: RouteContext<'/api/composio/logs/[id]'>
 ) {
   const { id } = await ctx.params;
-  const isMock = process.env.NEXT_PUBLIC_MOCK_MODE === 'true';
+  const apiKey = request.headers.get('x-composio-key');
+  const isMock = apiKey === 'mock_mode' || (process.env.NEXT_PUBLIC_MOCK_MODE === 'true' && !apiKey);
 
   if (isMock) {
     const execution = getMockExecutionById(id);
@@ -17,7 +18,6 @@ export async function GET(
     return Response.json(execution);
   }
 
-  const apiKey = request.headers.get('x-composio-key');
   if (!apiKey) {
     return Response.json({ error: 'API key is required', code: 401 }, { status: 401 });
   }

@@ -4,7 +4,7 @@ import { getMockExecutions } from '@/lib/mock-data';
 
 export async function POST(request: NextRequest) {
   const apiKey = request.headers.get('x-composio-key');
-  const isMock = process.env.NEXT_PUBLIC_MOCK_MODE === 'true' && (!apiKey || apiKey === 'mock_mode');
+  const isMock = apiKey === 'mock_mode' || (process.env.NEXT_PUBLIC_MOCK_MODE === 'true' && !apiKey);
 
   if (isMock) {
     const executions = getMockExecutions();

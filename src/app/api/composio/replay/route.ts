@@ -2,7 +2,8 @@ import { NextRequest } from 'next/server';
 import { replayToolCall, ComposioError } from '@/lib/composio';
 
 export async function POST(request: NextRequest) {
-  const isMock = process.env.NEXT_PUBLIC_MOCK_MODE === 'true';
+  const apiKey = request.headers.get('x-composio-key');
+  const isMock = apiKey === 'mock_mode' || (process.env.NEXT_PUBLIC_MOCK_MODE === 'true' && !apiKey);
 
   if (isMock) {
     await new Promise(resolve => setTimeout(resolve, 800));
@@ -18,7 +19,6 @@ export async function POST(request: NextRequest) {
     });
   }
 
-  const apiKey = request.headers.get('x-composio-key');
   if (!apiKey) {
     return Response.json({ error: 'API key is required', code: 401 }, { status: 401 });
   }
