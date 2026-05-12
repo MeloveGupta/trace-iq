@@ -21,8 +21,26 @@ export async function POST(request: NextRequest) {
     return Response.json(result);
   } catch (err) {
     if (err instanceof ComposioError) {
-      return Response.json({ error: err.message, code: err.code }, { status: err.code });
+      console.error('Composio logs request failed', {
+        code: err.code,
+        message: err.message,
+      });
+
+      const status = getSafeStatusCode(err.code);
+      return Response.json({ error: getPublicComposioError(status), code: status }, { status });
     }
+
+    console.error('Unexpected Composio logs error', err);
     return Response.json({ error: 'Internal server error', code: 500 }, { status: 500 });
   }
+}
+
+function getSafeStatusCode(code: number): number {
+  return code >= 400 && code <= 599 ? code : 502;
+}
+
+function getPublicComposioError(status: number): string {
+  if (status === 401 || status === 403) return 'Unable to authenticate with Composio';
+  if (status === 429) return 'Composio rate limit reached';
+  return 'Unable to load Composio logs';
 }

@@ -11,6 +11,8 @@ export interface IToolExecution {
   finished_at: string;
   duration_ms: number;
   token_count?: number;
+  input_tokens?: number;
+  output_tokens?: number;
   cost_usd?: number;
   request_payload: Record<string, unknown> | null;
   response_body: Record<string, unknown> | null;
@@ -40,6 +42,8 @@ export interface ILogFilter {
   time_range?: '1h' | '6h' | '24h' | '7d';
   session_id?: string;
   tool_name?: string;
+  start_time?: string;
+  end_time?: string;
   cursor?: string;
   limit?: number;
 }

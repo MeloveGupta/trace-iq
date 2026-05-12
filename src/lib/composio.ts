@@ -12,9 +12,11 @@ export async function fetchComposioLogs(
   if (filter?.session_id) body.session_id = filter.session_id;
   if (filter?.tool_name) body.tool_name = filter.tool_name;
   if (filter?.cursor) body.cursor = filter.cursor;
-  body.limit = filter?.limit || 50;
+  if (filter?.start_time) body.start_time = filter.start_time;
+  if (filter?.end_time) body.end_time = filter.end_time;
+  body.limit = normalizeLogLimit(filter?.limit);
 
-  if (filter?.time_range) {
+  if (filter?.time_range && !filter.start_time && !filter.end_time) {
     const ms: Record<string, number> = { '1h': 3600000, '6h': 21600000, '24h': 86400000, '7d': 604800000 };
     body.start_time = new Date(Date.now() - ms[filter.time_range]).toISOString();
     body.end_time = new Date().toISOString();
@@ -103,6 +105,13 @@ function mapLogEntry(raw: Record<string, unknown>): IToolExecution {
   const durationMs = raw.duration_ms as number ||
     (new Date(finishedAt).getTime() - new Date(startedAt).getTime());
   const usage = isRecord(raw.usage) ? raw.usage : {};
+  const inputTokens = getOptionalNumber(raw, ['input_tokens', 'inputTokens', 'input_token_count', 'inputTokenCount', 'prompt_tokens', 'promptTokens', 'prompt_token_count', 'promptTokenCount'])
+    ?? getOptionalNumber(usage, ['input_tokens', 'inputTokens', 'input_token_count', 'inputTokenCount', 'prompt_tokens', 'promptTokens', 'prompt_token_count', 'promptTokenCount']);
+  const outputTokens = getOptionalNumber(raw, ['output_tokens', 'outputTokens', 'output_token_count', 'outputTokenCount', 'completion_tokens', 'completionTokens', 'completion_token_count', 'completionTokenCount'])
+    ?? getOptionalNumber(usage, ['output_tokens', 'outputTokens', 'output_token_count', 'outputTokenCount', 'completion_tokens', 'completionTokens', 'completion_token_count', 'completionTokenCount']);
+  const tokenCount = getOptionalNumber(raw, ['token_count', 'tokenCount', 'total_tokens', 'totalTokens', 'tokens'])
+    ?? getOptionalNumber(usage, ['total_tokens', 'totalTokens', 'token_count', 'tokenCount', 'tokens'])
+    ?? (typeof inputTokens === 'number' || typeof outputTokens === 'number' ? (inputTokens ?? 0) + (outputTokens ?? 0) : undefined);
 
   let status = (raw.status as string) || 'unknown';
   if (status === 'completed') status = 'success';
@@ -119,8 +128,9 @@ function mapLogEntry(raw: Record<string, unknown>): IToolExecution {
     started_at: startedAt,
     finished_at: finishedAt,
     duration_ms: durationMs,
-    token_count: getOptionalNumber(raw, ['token_count', 'tokenCount', 'total_tokens', 'totalTokens', 'tokens'])
-      ?? getOptionalNumber(usage, ['total_tokens', 'totalTokens', 'token_count', 'tokenCount', 'tokens']),
+    token_count: tokenCount,
+    input_tokens: inputTokens,
+    output_tokens: outputTokens,
     cost_usd: getOptionalNumber(raw, ['cost_usd', 'costUsd', 'total_cost_usd', 'totalCostUsd', 'cost'])
       ?? getOptionalNumber(usage, ['cost_usd', 'costUsd', 'total_cost_usd', 'totalCostUsd', 'cost']),
     request_payload: (raw.request_payload || raw.requestPayload || raw.input || null) as Record<string, unknown> | null,
@@ -155,6 +165,11 @@ function getSourceMetadataValue(raw: Record<string, unknown>, key: string): stri
   const sourceMetadataCamel = isRecord(raw.sourceMetadata) ? raw.sourceMetadata : undefined;
   const value = sourceMetadata?.[key] ?? sourceMetadataCamel?.[key];
   return typeof value === 'string' && value ? value : undefined;
+}
+
+function normalizeLogLimit(limit: number | undefined): number {
+  if (typeof limit !== 'number' || !Number.isFinite(limit)) return 50;
+  return Math.min(Math.max(Math.floor(limit), 1), 100);
 }
 
 export class ComposioError extends Error {
