@@ -14,12 +14,12 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "TraceIQ — Visual Debugger for AI Agent Tool Calls",
+  title: "TraceIQ",
   description:
     "See exactly what your AI agent did, and why. Visual debugging for Composio execution logs.",
   keywords: ["AI", "debugging", "Composio", "tool calls", "agent", "trace"],
   openGraph: {
-    title: "TraceIQ — Visual Debugger for AI Agent Tool Calls",
+    title: "TraceIQ",
     description:
       "See exactly what your AI agent did, and why. Visual debugging for Composio execution logs.",
     type: "website",
