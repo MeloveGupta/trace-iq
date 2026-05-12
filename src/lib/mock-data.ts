@@ -1,5 +1,5 @@
 import type { IToolExecution, ISession } from '@/types/composio';
-import { deriveSessionStatus } from '@/lib/utils';
+import { groupExecutionsIntoSessions } from '@/lib/sessions';
 
 const MOCK_EXECUTIONS: IToolExecution[] = [
   {
@@ -235,41 +235,5 @@ export function getMockExecutionById(id: string): IToolExecution | undefined {
 }
 
 export function groupIntoSessions(executions: IToolExecution[]): ISession[] {
-  const groups = new Map<string, IToolExecution[]>();
-
-  for (const exec of executions) {
-    const existing = groups.get(exec.session_id) || [];
-    existing.push(exec);
-    groups.set(exec.session_id, existing);
-  }
-
-  const sessions: ISession[] = [];
-
-  groups.forEach((steps, session_id) => {
-    const sorted = steps.sort((a, b) => new Date(a.started_at).getTime() - new Date(b.started_at).getTime());
-    const first = sorted[0];
-    const last = sorted[sorted.length - 1];
-    const toolkitSet = new Set(sorted.map(s => s.toolkit_name));
-    const tokenValues = sorted
-      .map(s => s.token_count)
-      .filter((value): value is number => typeof value === 'number');
-    const costValues = sorted
-      .map(s => s.cost_usd)
-      .filter((value): value is number => typeof value === 'number');
-
-    sessions.push({
-      session_id,
-      steps: sorted,
-      total_duration_ms: new Date(last.finished_at).getTime() - new Date(first.started_at).getTime(),
-      total_tokens: tokenValues.length ? tokenValues.reduce((acc, value) => acc + value, 0) : undefined,
-      total_cost_usd: costValues.length ? costValues.reduce((acc, value) => acc + value, 0) : undefined,
-      step_count: sorted.length,
-      status: deriveSessionStatus(sorted),
-      started_at: first.started_at,
-      finished_at: last.finished_at,
-      toolkit_names: Array.from(toolkitSet),
-    });
-  });
-
-  return sessions.sort((a, b) => new Date(b.started_at).getTime() - new Date(a.started_at).getTime());
+  return groupExecutionsIntoSessions(executions);
 }

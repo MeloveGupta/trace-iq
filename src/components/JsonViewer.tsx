@@ -1,7 +1,11 @@
 'use client';
 
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useMemo, useRef } from 'react';
 import { cn } from '@/lib/utils';
+
+const LARGE_JSON_CHAR_LIMIT = 120000;
+const MAX_RENDERED_CHILDREN = 80;
+const MAX_RENDERED_STRING_LENGTH = 2000;
 
 interface JsonViewerProps {
   data: Record<string, unknown> | null;
@@ -12,6 +16,8 @@ interface JsonViewerProps {
 export default function JsonViewer({ data, label, maxInitialDepth = 2 }: JsonViewerProps) {
   const [copied, setCopied] = useState(false);
   const preRef = useRef<HTMLPreElement>(null);
+  const serializedLength = useMemo(() => data ? JSON.stringify(data).length : 0, [data]);
+  const renderDepth = serializedLength > LARGE_JSON_CHAR_LIMIT ? 0 : maxInitialDepth;
 
   const handleCopy = useCallback(async () => {
     if (!data) return;
@@ -75,7 +81,12 @@ export default function JsonViewer({ data, label, maxInitialDepth = 2 }: JsonVie
         className="bg-bg-base/80 border border-border/30 rounded-xl p-4 overflow-auto
                    max-h-[400px] text-[12px] font-mono leading-[1.7] selection:bg-accent-blue/20"
       >
-        <JsonNode value={data} depth={0} maxDepth={maxInitialDepth} />
+        {serializedLength > LARGE_JSON_CHAR_LIMIT && (
+          <span className="mb-3 block whitespace-normal rounded-md border border-warning/20 bg-warning/8 px-3 py-2 text-[11px] font-sans text-warning">
+            Large payload. Nested collections are collapsed and capped for browser performance; copy still includes the full JSON.
+          </span>
+        )}
+        <JsonNode value={data} depth={0} maxDepth={renderDepth} />
       </pre>
     </div>
   );
@@ -131,13 +142,16 @@ function JsonNode({ value, depth, maxDepth, keyName }: JsonNodeProps) {
   }
 
   if (typeof value === 'string') {
+    const isLong = value.length > MAX_RENDERED_STRING_LENGTH;
+    const displayValue = isLong ? `${value.slice(0, MAX_RENDERED_STRING_LENGTH)}…` : value;
     return (
       <span>
         {keyName !== undefined && (
           <span className="text-accent-blue/80">&quot;{keyName}&quot;</span>
         )}
         {keyName !== undefined && <span className="text-text-tertiary">: </span>}
-        <span className="text-mono-font/80">&quot;{value}&quot;</span>
+        <span className="text-mono-font/80">&quot;{displayValue}&quot;</span>
+        {isLong && <span className="text-text-tertiary/60"> ({value.length.toLocaleString('en-US')} chars)</span>}
       </span>
     );
   }
@@ -177,14 +191,21 @@ function JsonNode({ value, depth, maxDepth, keyName }: JsonNodeProps) {
         ) : (
           <>
             {'\n'}
-            {value.map((item, i) => (
+            {value.slice(0, MAX_RENDERED_CHILDREN).map((item, i) => (
               <span key={i}>
                 {childIndent}
                 <JsonNode value={item} depth={depth + 1} maxDepth={maxDepth} />
-                {i < value.length - 1 && <span className="text-text-tertiary">,</span>}
+                {i < Math.min(value.length, MAX_RENDERED_CHILDREN) - 1 && <span className="text-text-tertiary">,</span>}
                 {'\n'}
               </span>
             ))}
+            {value.length > MAX_RENDERED_CHILDREN && (
+              <span>
+                {childIndent}
+                <span className="text-text-tertiary/60">… {value.length - MAX_RENDERED_CHILDREN} more items</span>
+                {'\n'}
+              </span>
+            )}
             {indent}
           </>
         )}
@@ -230,14 +251,21 @@ function JsonNode({ value, depth, maxDepth, keyName }: JsonNodeProps) {
         ) : (
           <>
             {'\n'}
-            {entries.map(([k, v], i) => (
+            {entries.slice(0, MAX_RENDERED_CHILDREN).map(([k, v], i) => (
               <span key={k}>
                 {childIndent}
                 <JsonNode value={v} depth={depth + 1} maxDepth={maxDepth} keyName={k} />
-                {i < entries.length - 1 && <span className="text-text-tertiary">,</span>}
+                {i < Math.min(entries.length, MAX_RENDERED_CHILDREN) - 1 && <span className="text-text-tertiary">,</span>}
                 {'\n'}
               </span>
             ))}
+            {entries.length > MAX_RENDERED_CHILDREN && (
+              <span>
+                {childIndent}
+                <span className="text-text-tertiary/60">… {entries.length - MAX_RENDERED_CHILDREN} more keys</span>
+                {'\n'}
+              </span>
+            )}
             {indent}
           </>
         )}

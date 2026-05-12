@@ -42,6 +42,7 @@ export interface ILogFilter {
   time_range?: '1h' | '6h' | '24h' | '7d';
   session_id?: string;
   tool_name?: string;
+  user_id?: string;
   start_time?: string;
   end_time?: string;
   cursor?: string;
@@ -53,6 +54,7 @@ export interface IReplayRequest {
   tool_name: string;
   request_payload: Record<string, unknown>;
   user_id: string;
+  confirmed_replay?: boolean;
 }
 
 export interface IReplayResult {
@@ -60,4 +62,17 @@ export interface IReplayResult {
   response_body: Record<string, unknown> | null;
   duration_ms: number;
   error_message: string | null;
+}
+
+export interface IReplayComparison {
+  statusChanged: boolean;
+  latencyDeltaMs: number;
+  responseChanged: boolean;
+  errorChanged: boolean;
+}
+
+export interface ApiErrorResponse {
+  error: string;
+  code: number;
+  request_id?: string;
 }

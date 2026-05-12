@@ -1,11 +1,13 @@
 import { NextRequest } from 'next/server';
-import { fetchComposioLogDetail, ComposioError } from '@/lib/composio';
+import { fetchComposioLogDetail } from '@/lib/composio';
+import { handleRouteError, jsonError } from '@/lib/api-errors';
 import { getMockExecutionById } from '@/lib/mock-data';
 
 export async function GET(
   request: NextRequest,
   ctx: RouteContext<'/api/composio/logs/[id]'>
 ) {
+  const requestId = crypto.randomUUID();
   const { id } = await ctx.params;
   const apiKey = request.headers.get('x-composio-key');
   const isMock = apiKey === 'mock_mode' || (process.env.NEXT_PUBLIC_MOCK_MODE === 'true' && !apiKey);
@@ -13,22 +15,20 @@ export async function GET(
   if (isMock) {
     const execution = getMockExecutionById(id);
     if (!execution) {
-      return Response.json({ error: 'Not found', code: 404 }, { status: 404 });
+      return jsonError('Log not found', 404, requestId);
     }
     return Response.json(execution);
   }
 
   if (!apiKey) {
-    return Response.json({ error: 'API key is required', code: 401 }, { status: 401 });
+    return jsonError('API key is required', 401, requestId);
   }
 
   try {
     const result = await fetchComposioLogDetail(apiKey, id);
     return Response.json(result);
   } catch (err) {
-    if (err instanceof ComposioError) {
-      return Response.json({ error: err.message, code: err.code }, { status: err.code });
-    }
-    return Response.json({ error: 'Internal server error', code: 500 }, { status: 500 });
+    console.error('Composio log detail request failed', { requestId, id, err });
+    return handleRouteError(err, 'Unable to load Composio log detail', requestId);
   }
 }

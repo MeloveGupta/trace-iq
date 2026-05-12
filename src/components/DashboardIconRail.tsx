@@ -38,10 +38,6 @@ export default function DashboardIconRail({ active }: DashboardIconRailProps) {
           <path d="M19 20v-7" />
           <path d="M3 20h18" />
         </RailButton>
-        <RailButton label="Console">
-          <path d="m7 8 4 4-4 4" />
-          <path d="M13 16h5" />
-        </RailButton>
       </nav>
 
       <div className="mt-auto flex h-[35px] w-[35px] items-center justify-center rounded-full bg-[#1b2028] text-[11px] font-semibold text-[#d8dce3]">

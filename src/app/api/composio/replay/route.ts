@@ -1,9 +1,28 @@
 import { NextRequest } from 'next/server';
-import { replayToolCall, ComposioError } from '@/lib/composio';
+import { replayToolCall } from '@/lib/composio';
+import { handleRouteError, jsonError } from '@/lib/api-errors';
+import { isRecord } from '@/lib/composio-normalize';
 
 export async function POST(request: NextRequest) {
+  const requestId = crypto.randomUUID();
   const apiKey = request.headers.get('x-composio-key');
   const isMock = apiKey === 'mock_mode' || (process.env.NEXT_PUBLIC_MOCK_MODE === 'true' && !apiKey);
+  const body = await request.json().catch(() => null);
+
+  if (!isRecord(body)) {
+    return jsonError('Request body must be a JSON object', 400, requestId);
+  }
+
+  if (body.confirmed_replay !== true) {
+    return jsonError('Replay must be explicitly confirmed', 400, requestId);
+  }
+
+  const toolName = body.tool_name;
+  const requestPayload = body.request_payload;
+
+  if (typeof toolName !== 'string' || !toolName.trim() || !isRecord(requestPayload)) {
+    return jsonError('tool_name and request_payload are required', 400, requestId);
+  }
 
   if (isMock) {
     await new Promise(resolve => setTimeout(resolve, 800));
@@ -20,26 +39,15 @@ export async function POST(request: NextRequest) {
   }
 
   if (!apiKey) {
-    return Response.json({ error: 'API key is required', code: 401 }, { status: 401 });
+    return jsonError('API key is required', 401, requestId);
   }
 
   try {
-    const body = await request.json();
-
-    if (!body.tool_name || !body.request_payload) {
-      return Response.json(
-        { error: 'tool_name and request_payload are required', code: 400 },
-        { status: 400 }
-      );
-    }
-
-    const toolSlug = body.tool_name.toLowerCase();
-    const result = await replayToolCall(apiKey, toolSlug, body.request_payload);
+    const toolSlug = toolName.trim().toLowerCase();
+    const result = await replayToolCall(apiKey, toolSlug, requestPayload);
     return Response.json(result);
   } catch (err) {
-    if (err instanceof ComposioError) {
-      return Response.json({ error: err.message, code: err.code }, { status: err.code });
-    }
-    return Response.json({ error: 'Internal server error', code: 500 }, { status: 500 });
+    console.error('Composio replay request failed', { requestId, err });
+    return handleRouteError(err, 'Unable to replay tool call', requestId);
   }
 }

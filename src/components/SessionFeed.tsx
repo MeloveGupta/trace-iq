@@ -81,6 +81,10 @@ export default function SessionFeed({ sessions, isLoading, hasMore, onLoadMore }
 
 function SessionCard({ session, index, onOpen }: { session: ISession; index: number; onOpen: () => void }) {
   const badge = statusBadge[session.status];
+  const visibleChipSteps = session.steps.slice(0, 8);
+  const hiddenChipCount = Math.max(session.steps.length - visibleChipSteps.length, 0);
+  const visibleSegments = session.steps.slice(0, 24);
+  const hiddenSegmentCount = Math.max(session.steps.length - visibleSegments.length, 0);
 
   return (
     <button
@@ -121,7 +125,7 @@ function SessionCard({ session, index, onOpen }: { session: ISession; index: num
       </div>
 
       <div className="mt-[18px] flex flex-wrap gap-[7px]">
-        {session.steps.map((step) => (
+        {visibleChipSteps.map((step) => (
           <span
             key={step.id || `${session.session_id}-${step.tool_name}-${step.started_at}`}
             className="max-w-[190px] truncate rounded-[4px] border border-[#252c36] bg-[#151a22] px-[8px] py-[4px] font-mono text-[11px] leading-none text-[#aeb7c6]"
@@ -130,10 +134,15 @@ function SessionCard({ session, index, onOpen }: { session: ISession; index: num
             {formatToolName(step.tool_name)}
           </span>
         ))}
+        {hiddenChipCount > 0 && (
+          <span className="rounded-[4px] border border-[#252c36] bg-[#151a22] px-[8px] py-[4px] font-mono text-[11px] leading-none text-[#7f8794]">
+            +{hiddenChipCount} more
+          </span>
+        )}
       </div>
 
       <div className="mt-[18px] flex h-[28px] w-full gap-1">
-        {session.steps.length > 0 ? session.steps.map((step) => (
+        {visibleSegments.length > 0 ? visibleSegments.map((step) => (
           <div
             key={`${step.id || step.tool_name}-bar`}
             className={`h-full rounded-[4px] ${getSegmentClass(step.status)}`}
@@ -142,6 +151,14 @@ function SessionCard({ session, index, onOpen }: { session: ISession; index: num
           />
         )) : (
           <div className="h-full flex-1 rounded-[4px] bg-[#233045]" />
+        )}
+        {hiddenSegmentCount > 0 && (
+          <div
+            className="flex h-full min-w-12 items-center justify-center rounded-[4px] bg-[#1d2530] font-mono text-[10px] text-[#7f8794]"
+            title={`${hiddenSegmentCount} additional steps`}
+          >
+            +{hiddenSegmentCount}
+          </div>
         )}
       </div>
     </button>

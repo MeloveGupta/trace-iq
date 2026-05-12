@@ -18,6 +18,8 @@ TraceIQ connects to your Composio project via API key and provides:
 - **One-Click Replay** - Re-execute any tool call with its original payload to verify fixes
 - **Filtering & Search** - Filter by status (success/failed/running), time range, tool name, or session ID
 - **Copy Payloads** - One-click copy of any request or response JSON
+- **Replay Guardrails** - Confirm and edit replay payloads before running a live external action
+- **Live Refresh** - Manually refresh or poll running sessions from the dashboard
 
 ## Tech Stack
 
@@ -29,6 +31,7 @@ TraceIQ connects to your Composio project via API key and provides:
 | State | Zustand |
 | Fonts | Inter + JetBrains Mono |
 | API | Composio REST API v3.1 |
+| Tests | Vitest |
 
 ## Getting Started
 
@@ -94,5 +97,6 @@ src/
 ## Security
 
 - API key stored in `sessionStorage` (cleared on tab close)
-- Key forwarded server-side only, never in browser network requests
+- Browser requests send the key only to TraceIQ's own Next.js API routes via the `x-composio-key` header
 - No persistent storage, no logging of credentials
+- For stronger protection in a multi-user deployment, move the key into an HttpOnly server session/cookie

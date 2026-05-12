@@ -67,6 +67,7 @@ export default function AnalyticsPage() {
     if (!hydrated || !apiKey) return;
 
     let cancelled = false;
+    const controller = new AbortController();
     const currentApiKey = apiKey;
     const currentWindow = getCurrentWindow(range);
     const previousWindow = getPreviousWindow(currentWindow);
@@ -77,8 +78,8 @@ export default function AnalyticsPage() {
 
       try {
         const [current, previous] = await Promise.all([
-          fetchLogsForWindow(currentApiKey, currentWindow),
-          fetchLogsForWindow(currentApiKey, previousWindow),
+          fetchLogsForWindow(currentApiKey, currentWindow, controller.signal),
+          fetchLogsForWindow(currentApiKey, previousWindow, controller.signal),
         ]);
 
         if (cancelled) return;
@@ -86,6 +87,7 @@ export default function AnalyticsPage() {
         setLogs(current);
         setPreviousLogs(previous);
       } catch (err) {
+        if (controller.signal.aborted) return;
         if (cancelled) return;
         setLogs([]);
         setPreviousLogs([]);
@@ -99,12 +101,18 @@ export default function AnalyticsPage() {
 
     return () => {
       cancelled = true;
+      controller.abort();
     };
   }, [hydrated, apiKey, range]);
 
   const analytics = useMemo<AnalyticsResult>(() => {
     return aggregateAnalytics(logs, previousLogs, range, windowBounds.start, windowBounds.end);
   }, [logs, previousLogs, range, windowBounds]);
+
+  const openToolDrilldown = (toolName: string) => {
+    const params = new URLSearchParams({ range, q: toolName });
+    router.push(`/dashboard?${params.toString()}`);
+  };
 
   const comparisonLabel = getComparisonLabel(range);
 
@@ -197,18 +205,10 @@ export default function AnalyticsPage() {
               </ChartCard>
             </section>
 
-            <ToolReliabilityTable rows={analytics.toolReliability} isLoading={isLoading} />
+            <ToolReliabilityTable rows={analytics.toolReliability} isLoading={isLoading} onOpenTool={openToolDrilldown} />
           </div>
         </div>
       </main>
-
-      <button
-        type="button"
-        className="fixed bottom-5 right-5 flex h-9 w-9 items-center justify-center rounded-full border border-[#3a3f48] bg-[#2a2c30] text-[20px] text-[#f4f4f5] shadow-lg shadow-black/40 transition-colors hover:bg-[#33363c]"
-        aria-label="Help"
-      >
-        ?
-      </button>
     </div>
   );
 }
@@ -567,7 +567,7 @@ function ChartLegend({ items }: { items: { label: string; color: string }[] }) {
   );
 }
 
-function ToolReliabilityTable({ rows, isLoading }: { rows: ToolReliabilityRow[]; isLoading: boolean }) {
+function ToolReliabilityTable({ rows, isLoading, onOpenTool }: { rows: ToolReliabilityRow[]; isLoading: boolean; onOpenTool: (toolName: string) => void }) {
   return (
     <section className={`mt-[21px] overflow-hidden rounded-[8px] border border-[#252b34] bg-[#101419] ${isLoading ? 'opacity-80' : ''}`} aria-busy={isLoading}>
       <div className="border-b border-[#1d232b] px-[21px] py-[18px]">
@@ -586,7 +586,7 @@ function ToolReliabilityTable({ rows, isLoading }: { rows: ToolReliabilityRow[];
           </thead>
           <tbody>
             {rows.length > 0 ? rows.map(row => (
-              <ToolReliabilityRowView key={row.toolName} row={row} />
+              <ToolReliabilityRowView key={row.toolName} row={row} onOpenTool={onOpenTool} />
             )) : (
               <tr className="h-[52px] border-b border-[#1d232b]">
                 <td colSpan={5} className="px-[21px] text-[12px] text-[#7f8794]">No executions in this range</td>
@@ -599,13 +599,21 @@ function ToolReliabilityTable({ rows, isLoading }: { rows: ToolReliabilityRow[];
   );
 }
 
-function ToolReliabilityRowView({ row }: { row: ToolReliabilityRow }) {
+function ToolReliabilityRowView({ row, onOpenTool }: { row: ToolReliabilityRow; onOpenTool: (toolName: string) => void }) {
   const completed = row.success + row.failed;
   const low = completed > 0 && row.successRate < 90;
 
   return (
-    <tr className="h-[51px] border-b border-[#1d232b] last:border-b-0">
-      <td className="px-[21px] font-mono text-[12px] font-bold text-[#f4f7fb]">{row.toolName}</td>
+    <tr className="h-[51px] border-b border-[#1d232b] last:border-b-0 hover:bg-[#121821]">
+      <td className="px-[21px]">
+        <button
+          type="button"
+          onClick={() => onOpenTool(row.toolName)}
+          className="font-mono text-[12px] font-bold text-[#f4f7fb] underline-offset-4 hover:underline"
+        >
+          {row.toolName}
+        </button>
+      </td>
       <td className="px-[21px] font-mono text-[12px] text-[#00d7a0] tabular-nums">{formatInteger(row.success)}</td>
       <td className="px-[21px] font-mono text-[12px] text-[#ff4138] tabular-nums">{formatInteger(row.failed)}</td>
       <td className="px-[21px]">
@@ -621,12 +629,12 @@ function ToolReliabilityRowView({ row }: { row: ToolReliabilityRow }) {
   );
 }
 
-async function fetchLogsForWindow(apiKey: string, window: RangeWindow): Promise<IToolExecution[]> {
+async function fetchLogsForWindow(apiKey: string, window: RangeWindow, signal: AbortSignal): Promise<IToolExecution[]> {
   const allLogs: IToolExecution[] = [];
   const seenCursors = new Set<string>();
   let cursor: string | undefined;
 
-  for (let page = 0; page < 40; page += 1) {
+  for (let page = 0; page < 12; page += 1) {
     const res = await fetch('/api/composio/logs', {
       method: 'POST',
       headers: {
@@ -639,6 +647,7 @@ async function fetchLogsForWindow(apiKey: string, window: RangeWindow): Promise<
         limit: 100,
         ...(cursor ? { cursor } : {}),
       }),
+      signal,
     });
 
     const data = await res.json().catch(() => ({})) as LogsResponse;

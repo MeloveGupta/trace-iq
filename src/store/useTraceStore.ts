@@ -2,7 +2,10 @@
 
 import { create } from 'zustand';
 import type { ISession, IToolExecution, ILogFilter } from '@/types/composio';
-import { deriveSessionStatus } from '@/lib/utils';
+import { groupExecutionsIntoSessions, mergeExecutions } from '@/lib/sessions';
+
+let activeLogsController: AbortController | null = null;
+let activeLogsRequestId = 0;
 
 interface TraceState {
   apiKey: string | null;
@@ -15,6 +18,7 @@ interface TraceState {
   isLoading: boolean;
   error: string | null;
   cursor: string | null;
+  lastUpdatedAt: string | null;
 
   setApiKey: (key: string) => void;
   disconnect: () => void;
@@ -23,6 +27,7 @@ interface TraceState {
   selectSession: (id: string | null) => void;
   selectStep: (step: IToolExecution | null) => void;
   setFilter: (filter: Partial<ILogFilter>) => void;
+  resetFilter: () => void;
   setLoading: (loading: boolean) => void;
   setError: (error: string | null) => void;
   setCursor: (cursor: string | null) => void;
@@ -41,6 +46,7 @@ export const useTraceStore = create<TraceState>((set, get) => ({
   isLoading: false,
   error: null,
   cursor: null,
+  lastUpdatedAt: null,
 
   setApiKey: (key: string) => {
     if (typeof window !== 'undefined') {
@@ -61,6 +67,7 @@ export const useTraceStore = create<TraceState>((set, get) => ({
       selectedSessionId: null,
       selectedStep: null,
       cursor: null,
+      lastUpdatedAt: null,
     });
   },
 
@@ -75,9 +82,15 @@ export const useTraceStore = create<TraceState>((set, get) => ({
   selectStep: (step) => set({ selectedStep: step }),
 
   setFilter: (newFilter) => {
+    if (Object.keys(newFilter).length === 0) {
+      set({ filter: {}, cursor: null });
+      return;
+    }
+
     const currentFilter = get().filter;
-    set({ filter: { ...currentFilter, ...newFilter }, cursor: null });
+    set({ filter: compactFilter({ ...currentFilter, ...newFilter }), cursor: null });
   },
+  resetFilter: () => set({ filter: {}, cursor: null }),
 
   setLoading: (loading) => set({ isLoading: loading }),
   setError: (error) => set({ error }),
@@ -85,6 +98,15 @@ export const useTraceStore = create<TraceState>((set, get) => ({
 
   fetchLogs: async (append = false) => {
     const { apiKey, filter, cursor, allExecutions } = get();
+    const requestId = activeLogsRequestId + 1;
+    activeLogsRequestId = requestId;
+
+    if (activeLogsController && !append) {
+      activeLogsController.abort();
+    }
+
+    const controller = new AbortController();
+    activeLogsController = controller;
     set({ isLoading: true, error: null });
 
     try {
@@ -97,7 +119,10 @@ export const useTraceStore = create<TraceState>((set, get) => ({
           ...(apiKey ? { 'x-composio-key': apiKey } : {}),
         },
         body: JSON.stringify(fetchFilter),
+        signal: controller.signal,
       });
+
+      if (requestId !== activeLogsRequestId) return;
 
       if (!res.ok) {
         const data = await res.json().catch(() => ({ error: 'Request failed' }));
@@ -107,7 +132,7 @@ export const useTraceStore = create<TraceState>((set, get) => ({
       const data = await res.json();
       const newLogs: IToolExecution[] = data.logs || [];
 
-      const combined = append ? [...allExecutions, ...newLogs] : newLogs;
+      const combined = append ? mergeExecutions(allExecutions, newLogs) : newLogs;
       const sessions = groupExecutionsIntoSessions(combined);
 
       set({
@@ -115,8 +140,10 @@ export const useTraceStore = create<TraceState>((set, get) => ({
         sessions,
         cursor: data.cursor || null,
         isLoading: false,
+        lastUpdatedAt: new Date().toISOString(),
       });
     } catch (err) {
+      if (controller.signal.aborted || requestId !== activeLogsRequestId) return;
       set({
         isLoading: false,
         error: err instanceof Error ? err.message : 'Unknown error',
@@ -133,47 +160,8 @@ export const useTraceStore = create<TraceState>((set, get) => ({
   },
 }));
 
-function groupExecutionsIntoSessions(executions: IToolExecution[]): ISession[] {
-  const groups = new Map<string, IToolExecution[]>();
-
-  for (const exec of executions) {
-    const existing = groups.get(exec.session_id) || [];
-    existing.push(exec);
-    groups.set(exec.session_id, existing);
-  }
-
-  const sessions: ISession[] = [];
-
-  groups.forEach((steps, session_id) => {
-    const sorted = steps.sort(
-      (a, b) => new Date(a.started_at).getTime() - new Date(b.started_at).getTime()
-    );
-    const first = sorted[0];
-    const last = sorted[sorted.length - 1];
-    const toolkitSet = new Set(sorted.map(s => s.toolkit_name));
-    const tokenValues = sorted
-      .map(s => s.token_count)
-      .filter((value): value is number => typeof value === 'number');
-    const costValues = sorted
-      .map(s => s.cost_usd)
-      .filter((value): value is number => typeof value === 'number');
-
-    sessions.push({
-      session_id,
-      steps: sorted,
-      total_duration_ms:
-        new Date(last.finished_at).getTime() - new Date(first.started_at).getTime(),
-      total_tokens: tokenValues.length ? tokenValues.reduce((acc, value) => acc + value, 0) : undefined,
-      total_cost_usd: costValues.length ? costValues.reduce((acc, value) => acc + value, 0) : undefined,
-      step_count: sorted.length,
-      status: deriveSessionStatus(sorted),
-      started_at: first.started_at,
-      finished_at: last.finished_at,
-      toolkit_names: Array.from(toolkitSet),
-    });
-  });
-
-  return sessions.sort(
-    (a, b) => new Date(b.started_at).getTime() - new Date(a.started_at).getTime()
-  );
+function compactFilter(filter: ILogFilter): ILogFilter {
+  return Object.fromEntries(
+    Object.entries(filter).filter(([, value]) => value !== undefined && value !== null && value !== '')
+  ) as ILogFilter;
 }
