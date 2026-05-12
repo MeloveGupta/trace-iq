@@ -6,8 +6,8 @@ import { useTraceStore } from '@/store/useTraceStore';
 
 export default function ConnectForm() {
   const [key, setKey] = useState('');
-  const [showKey, setShowKey] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [mockLoading, setMockLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const setApiKey = useTraceStore(s => s.setApiKey);
   const fetchLogs = useTraceStore(s => s.fetchLogs);
@@ -32,54 +32,53 @@ export default function ConnectForm() {
     } finally { setLoading(false); }
   };
 
+  const handleMockMode = async () => {
+    setMockLoading(true);
+    setError(null);
+    try {
+      setApiKey('mock_mode');
+      await fetchLogs();
+      router.push('/dashboard');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load mock data');
+    } finally { setMockLoading(false); }
+  };
+
   return (
-    <div className="w-full max-w-[400px] animate-fade-in" style={{ animationDelay: '0.08s', opacity: 0 }}>
-      <div className="bg-bg-surface rounded-xl p-6 border border-border/50">
-        <label className="block text-[13px] font-semibold text-text-primary mb-3">
-          Composio API Key
+    <div className="w-full">
+      <div className="rounded-[8px] border border-[#2a3038] bg-[#111418] p-7">
+        <h2 className="mb-6 text-[18px] font-semibold leading-[22px] text-text-primary">
+          Connect Your API
+        </h2>
+
+        <label className="mb-2 block text-[13px] font-medium leading-4 text-[#a8afbd]">
+          API Key
         </label>
 
-        <div className="relative mb-4">
+        <div className="relative mb-[14px]">
           <input
             id="api-key-input"
-            type={showKey ? 'text' : 'password'}
+            type="password"
             value={key}
             onChange={(e) => { setKey(e.target.value); if (error) setError(null); }}
             onKeyDown={(e) => e.key === 'Enter' && handleConnect()}
-            placeholder="SK-..."
-            className="w-full bg-bg-elevated border border-border/60 focus:border-text-tertiary
-                       text-text-primary text-sm px-3.5 py-2.5 pr-10 rounded-lg
-                       outline-none transition-colors font-mono tracking-wide
-                       placeholder:text-text-tertiary/50"
+            placeholder="trace_••••••••••••••••••"
+            className="h-[42px] w-full rounded-[6px] border border-[#2a3038] bg-[#0b0d0f]
+                       px-3.5 font-mono text-[13px] text-text-primary outline-none
+                       transition-colors placeholder:text-[#717887] focus:border-accent-blue/60"
             autoFocus
             autoComplete="off"
           />
-          <button
-            type="button"
-            onClick={() => setShowKey(!showKey)}
-            className="absolute right-3 top-1/2 -translate-y-1/2 text-text-tertiary
-                       hover:text-text-secondary transition-colors"
-            aria-label={showKey ? 'Hide' : 'Show'}
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-              {showKey ? (
-                <><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></>
-              ) : (
-                <><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/></>
-              )}
-            </svg>
-          </button>
         </div>
 
         <button
           id="connect-button"
           onClick={handleConnect}
-          disabled={loading || !key.trim()}
-          className="w-full bg-accent-blue hover:bg-accent-blue/90
-                     disabled:bg-accent-blue/30 disabled:cursor-not-allowed
-                     text-white text-sm font-medium py-2.5 px-4 rounded-lg
-                     transition-all duration-200 active:scale-[0.98]
-                     flex items-center justify-center gap-2"
+          disabled={loading}
+          className="mb-[14px] flex h-[42px] w-full items-center justify-center gap-1.5
+                     rounded-[6px] bg-accent-blue px-4 text-[14px] font-medium text-white
+                     transition-all duration-200 hover:bg-accent-blue/90 active:scale-[0.98]
+                     disabled:cursor-not-allowed disabled:opacity-70"
         >
           {loading ? (
             <span className="flex items-center gap-2">
@@ -87,7 +86,27 @@ export default function ConnectForm() {
               Connecting…
             </span>
           ) : (
-            <>Connect <span className="text-white/70">→</span></>
+            <>Connect to TraceIQ <span className="text-white/80 ml-0.5">›</span></>
+          )}
+        </button>
+
+        <button
+          id="mock-mode-button"
+          onClick={handleMockMode}
+          disabled={mockLoading}
+          className="flex h-[44px] w-full items-center justify-center rounded-[6px]
+                     border border-[#2a3038] bg-transparent px-4 text-[14px] font-medium
+                     text-[#a8afbd] transition-all duration-200 hover:border-[#39414d]
+                     hover:bg-[#171b21] active:scale-[0.98] disabled:cursor-not-allowed
+                     disabled:opacity-50"
+        >
+          {mockLoading ? (
+            <span className="flex items-center gap-2">
+              <span className="w-4 h-4 border-2 border-text-tertiary/30 border-t-text-secondary rounded-full animate-spin" />
+              Loading…
+            </span>
+          ) : (
+            'Try Mock Mode'
           )}
         </button>
 
@@ -97,11 +116,6 @@ export default function ConnectForm() {
           </div>
         )}
       </div>
-
-      <p className="mt-4 text-text-tertiary/60 text-[11px] text-center leading-relaxed">
-        Your API key is used only to fetch your own logs.
-        <br />It never leaves your session.
-      </p>
     </div>
   );
 }
