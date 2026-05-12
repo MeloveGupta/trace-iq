@@ -4,14 +4,14 @@ import { getMockExecutions } from '@/lib/mock-data';
 
 export async function POST(request: NextRequest) {
   const apiKey = request.headers.get('x-composio-key');
-  const isMock = process.env.NEXT_PUBLIC_MOCK_MODE === 'true' && !apiKey;
+  const isMock = process.env.NEXT_PUBLIC_MOCK_MODE === 'true' && (!apiKey || apiKey === 'mock_mode');
 
   if (isMock) {
     const executions = getMockExecutions();
     return Response.json({ logs: executions, cursor: null });
   }
 
-  if (!apiKey) {
+  if (!apiKey || apiKey === 'mock_mode') {
     return Response.json({ error: 'API key is required', code: 401 }, { status: 401 });
   }
 
