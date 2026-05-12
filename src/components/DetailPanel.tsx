@@ -3,7 +3,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import type { IToolExecution } from '@/types/composio';
 import JsonViewer from './JsonViewer';
-import { formatDuration } from '@/lib/utils';
 import { useToast } from './Toast';
 
 interface DetailPanelProps { step: IToolExecution; onClose: () => void; onReplay: () => void; }
@@ -101,4 +100,3 @@ function CollapsibleSection({ title, children, defaultOpen = true }: { title: st
     </div>
   );
 }
-

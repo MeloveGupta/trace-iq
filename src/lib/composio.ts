@@ -102,6 +102,7 @@ function mapLogEntry(raw: Record<string, unknown>): IToolExecution {
   const finishedAt = (raw.finished_at || raw.finishedAt || raw.completed_at || startedAt) as string;
   const durationMs = raw.duration_ms as number ||
     (new Date(finishedAt).getTime() - new Date(startedAt).getTime());
+  const usage = isRecord(raw.usage) ? raw.usage : {};
 
   let status = (raw.status as string) || 'unknown';
   if (status === 'completed') status = 'success';
@@ -118,15 +119,42 @@ function mapLogEntry(raw: Record<string, unknown>): IToolExecution {
     started_at: startedAt,
     finished_at: finishedAt,
     duration_ms: durationMs,
+    token_count: getOptionalNumber(raw, ['token_count', 'tokenCount', 'total_tokens', 'totalTokens', 'tokens'])
+      ?? getOptionalNumber(usage, ['total_tokens', 'totalTokens', 'token_count', 'tokenCount', 'tokens']),
+    cost_usd: getOptionalNumber(raw, ['cost_usd', 'costUsd', 'total_cost_usd', 'totalCostUsd', 'cost'])
+      ?? getOptionalNumber(usage, ['cost_usd', 'costUsd', 'total_cost_usd', 'totalCostUsd', 'cost']),
     request_payload: (raw.request_payload || raw.requestPayload || raw.input || null) as Record<string, unknown> | null,
     response_body: (raw.response_body || raw.responseBody || raw.output || null) as Record<string, unknown> | null,
     error_message: (raw.error_message || raw.errorMessage || raw.error || null) as string | null,
     source_metadata: {
-      framework: (raw as Record<string, Record<string, string>>).source_metadata?.framework,
-      agent_name: (raw as Record<string, Record<string, string>>).source_metadata?.agent_name,
-      trace_id: (raw as Record<string, Record<string, string>>).source_metadata?.trace_id,
+      framework: getSourceMetadataValue(raw, 'framework'),
+      agent_name: getSourceMetadataValue(raw, 'agent_name') ?? getSourceMetadataValue(raw, 'agentName'),
+      trace_id: getSourceMetadataValue(raw, 'trace_id') ?? getSourceMetadataValue(raw, 'traceId'),
     },
   };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function getOptionalNumber(source: Record<string, unknown>, keys: string[]): number | undefined {
+  for (const key of keys) {
+    const value = source[key];
+    if (typeof value === 'number' && Number.isFinite(value)) return value;
+    if (typeof value === 'string' && value.trim() !== '') {
+      const parsed = Number(value);
+      if (Number.isFinite(parsed)) return parsed;
+    }
+  }
+  return undefined;
+}
+
+function getSourceMetadataValue(raw: Record<string, unknown>, key: string): string | undefined {
+  const sourceMetadata = isRecord(raw.source_metadata) ? raw.source_metadata : undefined;
+  const sourceMetadataCamel = isRecord(raw.sourceMetadata) ? raw.sourceMetadata : undefined;
+  const value = sourceMetadata?.[key] ?? sourceMetadataCamel?.[key];
+  return typeof value === 'string' && value ? value : undefined;
 }
 
 export class ComposioError extends Error {

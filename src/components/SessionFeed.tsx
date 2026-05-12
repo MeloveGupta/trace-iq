@@ -1,106 +1,244 @@
 'use client';
 
+import { formatDistanceToNowStrict } from 'date-fns';
 import { useRouter } from 'next/navigation';
-import type { ISession } from '@/types/composio';
-import { truncateId, formatDuration } from '@/lib/utils';
-import { format } from 'date-fns';
+import type { ExecutionStatus, ISession, IToolExecution } from '@/types/composio';
+import { truncateId } from '@/lib/utils';
 
-interface SessionFeedProps { sessions: ISession[]; isLoading: boolean; hasMore: boolean; onLoadMore: () => void; }
+interface SessionFeedProps {
+  sessions: ISession[];
+  isLoading: boolean;
+  hasMore: boolean;
+  onLoadMore: () => void;
+}
 
-const statusDot: Record<string, string> = {
-  success: 'bg-success',
-  failed: 'bg-error',
-  in_progress: 'bg-warning',
-  unknown: 'bg-neutral',
+const statusBadge: Record<ExecutionStatus, { label: string; className: string }> = {
+  success: { label: 'success', className: 'border-[#145b4d] bg-[#0d3b32] text-[#d5fff2]' },
+  failed: { label: 'failed', className: 'border-[#5a222a] bg-[#3a1d24] text-[#ffd9de]' },
+  in_progress: { label: 'running', className: 'border-[#1d4f82] bg-[#12345d] text-[#d8ecff]' },
+  unknown: { label: 'unknown', className: 'border-[#374151] bg-[#1f2937] text-[#d1d5db]' },
 };
 
 export default function SessionFeed({ sessions, isLoading, hasMore, onLoadMore }: SessionFeedProps) {
   const router = useRouter();
 
-  if (!isLoading && sessions.length === 0) {
+  if (sessions.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center py-24 text-center">
-        <p className="text-sm text-text-secondary mb-1">No sessions found</p>
-        <p className="text-xs text-text-tertiary">Run your first Composio agent to see traces here.</p>
+      <div className="w-full max-w-[1176px] px-7 pt-7">
+        <div className="flex h-[320px] flex-col items-center justify-center rounded-[8px] border border-[#242b34] bg-[#101419] text-center">
+          {isLoading ? (
+            <div className="flex items-center gap-2.5 text-[#8d96a5]">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="animate-spin" aria-hidden="true">
+                <path d="M21 12a9 9 0 1 1-6.22-8.57" />
+              </svg>
+              <span className="text-xs">Loading sessions...</span>
+            </div>
+          ) : (
+            <>
+              <p className="mb-1 text-sm text-[#d8dce3]">No sessions found</p>
+              <p className="text-xs text-[#7a828f]">Run your first Composio agent to see traces here.</p>
+            </>
+          )}
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="flex flex-col text-[13px]">
-      <div className="grid grid-cols-[28px_1fr_2fr_60px_80px_110px] gap-x-4 items-center px-5 py-2
-                      text-[11px] text-text-tertiary font-medium border-b border-border/40 bg-bg-surface/20">
-        <span>Status</span>
-        <span>Session ID</span>
-        <span>Path (First → Last Tool)</span>
-        <span className="text-right">Steps</span>
-        <span className="text-right">Duration</span>
-        <span className="text-right">Timestamp</span>
+    <div className="w-full max-w-[1176px] px-7 pb-10 pt-7">
+      <div className="flex flex-col gap-[14px]">
+        {sessions.map((session, i) => (
+          <SessionCard
+            key={session.session_id}
+            session={session}
+            index={i}
+            onOpen={() => router.push(`/session/${session.session_id}`)}
+          />
+        ))}
       </div>
 
-      {sessions.map((session, i) => {
-        const first = session.steps[0];
-        const last = session.steps[session.steps.length - 1];
-        const hasFailed = session.status === 'failed';
-
-        return (
-          <button
-            key={session.session_id}
-            onClick={() => router.push(`/session/${session.session_id}`)}
-            className="grid grid-cols-[28px_1fr_2fr_60px_80px_110px] gap-x-4 items-center
-                       px-5 py-2.5 border-b border-border/20
-                       hover:bg-bg-elevated/40 transition-colors text-left group animate-fade-in"
-            style={{ animationDelay: `${i * 30}ms`, opacity: 0 }}
-          >
-            <span className="flex justify-center">
-              <span className={`w-2.5 h-2.5 rounded-full ${statusDot[session.status]}`} />
-            </span>
-
-            <span className="font-mono text-accent-blue text-[12px] group-hover:underline truncate">
-              {truncateId(session.session_id, 14)}
-            </span>
-
-            <span className="flex items-center gap-1.5 min-w-0 text-text-secondary">
-              <span className="font-mono text-[12px] truncate max-w-[180px]">
-                {first?.tool_name || '—'}
-              </span>
-              {session.steps.length > 1 && (
-                <>
-                  <span className="text-text-tertiary shrink-0">→</span>
-                  <span className={`font-mono text-[12px] truncate max-w-[180px] ${hasFailed && last?.status === 'failed' ? 'text-error' : ''}`}>
-                    {last?.tool_name || '—'}
-                  </span>
-                </>
-              )}
-            </span>
-
-            <span className="text-right text-text-secondary tabular-nums">{session.step_count}</span>
-
-            <span className={`text-right font-mono tabular-nums text-[12px] ${session.total_duration_ms > 3000 ? 'text-error' : 'text-text-secondary'}`}>
-              {formatDuration(session.total_duration_ms)}
-            </span>
-
-            <span className="text-right text-text-tertiary text-[11px] tabular-nums">
-              {format(new Date(session.started_at), 'hh:mm:ss a')}
-            </span>
-          </button>
-        );
-      })}
-
       {isLoading && (
-        <div className="flex items-center justify-center gap-2.5 py-6 text-text-tertiary">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="animate-spin">
-            <path d="M21 12a9 9 0 1 1-6.22-8.57"/>
+        <div className="flex items-center justify-center gap-2.5 py-7 text-[#7f8896]">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="animate-spin" aria-hidden="true">
+            <path d="M21 12a9 9 0 1 1-6.22-8.57" />
           </svg>
           <span className="text-xs">Loading older sessions...</span>
         </div>
       )}
 
       {hasMore && !isLoading && (
-        <button onClick={onLoadMore} className="py-4 text-xs text-text-tertiary hover:text-text-secondary transition-colors text-center">
-          Load more…
+        <button
+          type="button"
+          onClick={onLoadMore}
+          className="mt-5 h-10 w-full rounded-[6px] border border-[#242b34] text-xs text-[#8d96a5] transition-colors hover:border-[#343c49] hover:text-[#d8dce3]"
+        >
+          Load more...
         </button>
       )}
     </div>
   );
+}
+
+function SessionCard({ session, index, onOpen }: { session: ISession; index: number; onOpen: () => void }) {
+  const badge = statusBadge[session.status];
+
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      className="group min-h-[213px] w-full rounded-[8px] border border-[#242b34] bg-[#101419] px-[21px] py-[19px] text-left shadow-none transition-colors hover:border-[#334052] hover:bg-[#111821] animate-fade-in"
+      style={{ animationDelay: `${index * 35}ms`, opacity: 0 }}
+    >
+      <div className="flex items-start justify-between gap-5">
+        <div className="flex min-w-0 items-start gap-[11px]">
+          <StatusMark status={session.status} />
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <span className="font-mono text-[12px] font-bold leading-none text-[#f4f7fb]">
+                {truncateId(session.session_id, 10)}
+              </span>
+              <span className={`rounded-[4px] border px-[6px] py-[2px] text-[10px] font-bold leading-none ${badge.className}`}>
+                {badge.label}
+              </span>
+            </div>
+            <div className="mt-2 truncate text-[15px] leading-none text-[#aeb7c6]">
+              {getSessionAgentName(session)}
+            </div>
+          </div>
+        </div>
+
+        <div className="flex shrink-0 items-center gap-1.5 font-mono text-[12px] leading-none text-[#7f8794]">
+          <ClockIcon />
+          {getRelativeLabel(session)}
+        </div>
+      </div>
+
+      <div className="mt-[19px] grid grid-cols-2 gap-x-7 gap-y-4 sm:grid-cols-4">
+        <Metric label="Tools" value={session.step_count.toString()} />
+        <Metric label="Duration" value={`${Math.round(session.total_duration_ms)}ms`} />
+        <Metric label="Tokens" value={formatOptionalInteger(session.total_tokens)} />
+        <Metric label="Cost" value={formatOptionalCost(session.total_cost_usd)} />
+      </div>
+
+      <div className="mt-[18px] flex flex-wrap gap-[7px]">
+        {session.steps.map((step) => (
+          <span
+            key={step.id || `${session.session_id}-${step.tool_name}-${step.started_at}`}
+            className="max-w-[190px] truncate rounded-[4px] border border-[#252c36] bg-[#151a22] px-[8px] py-[4px] font-mono text-[11px] leading-none text-[#aeb7c6]"
+            title={step.tool_name}
+          >
+            {formatToolName(step.tool_name)}
+          </span>
+        ))}
+      </div>
+
+      <div className="mt-[18px] flex h-[28px] w-full gap-1">
+        {session.steps.length > 0 ? session.steps.map((step) => (
+          <div
+            key={`${step.id || step.tool_name}-bar`}
+            className={`h-full rounded-[4px] ${getSegmentClass(step.status)}`}
+            style={{ flexGrow: getStepWeight(step), flexBasis: 0 }}
+            title={`${formatToolName(step.tool_name)} ${step.status}`}
+          />
+        )) : (
+          <div className="h-full flex-1 rounded-[4px] bg-[#233045]" />
+        )}
+      </div>
+    </button>
+  );
+}
+
+function Metric({ label, value }: { label: string; value: React.ReactNode }) {
+  return (
+    <div className="min-w-0">
+      <div className="mb-[7px] text-[10px] leading-none text-[#6f7886]">{label}</div>
+      <div className="font-mono text-[14px] font-bold leading-none text-[#f4f7fb] tabular-nums">{value}</div>
+    </div>
+  );
+}
+
+function StatusMark({ status }: { status: ExecutionStatus }) {
+  const colorClass = status === 'failed'
+    ? 'text-[#ff4138]'
+    : status === 'in_progress'
+      ? 'text-[#2f8bff]'
+      : status === 'success'
+        ? 'text-[#00d7a0]'
+        : 'text-[#8b949e]';
+
+  return (
+    <span className={`mt-[7px] flex h-[13px] w-[13px] shrink-0 items-center justify-center ${colorClass}`}>
+      <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <circle cx="8" cy="8" r="6.2" />
+        {status === 'failed' ? (
+          <>
+            <path d="m6 6 4 4" />
+            <path d="m10 6-4 4" />
+          </>
+        ) : status === 'in_progress' ? (
+          <path d="M8 5.2v3.1" />
+        ) : status === 'success' ? (
+          <path d="m5.2 8.2 1.8 1.8 3.8-4.2" />
+        ) : (
+          <path d="M8 5.2v3.1" />
+        )}
+      </svg>
+    </span>
+  );
+}
+
+function ClockIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <circle cx="8" cy="8" r="6" />
+      <path d="M8 4.5V8l2.4 1.4" />
+    </svg>
+  );
+}
+
+function getSessionAgentName(session: ISession): string {
+  return session.steps.find(step => step.source_metadata.agent_name)?.source_metadata.agent_name
+    || session.toolkit_names.join(' + ')
+    || 'UnknownAgent';
+}
+
+function getRelativeLabel(session: ISession): string {
+  if (session.status === 'in_progress') return 'running';
+
+  const date = new Date(session.started_at);
+  if (Number.isNaN(date.getTime())) return '';
+
+  return formatDistanceToNowStrict(date, { addSuffix: true })
+    .replace(/ seconds?/g, ' sec')
+    .replace(/ minutes?/g, ' min')
+    .replace(/ hours?/g, ' hr')
+    .replace(/ days?/g, ' d')
+    .replace(/ months?/g, ' mo')
+    .replace(/ years?/g, ' yr');
+}
+
+function formatOptionalInteger(value: number | undefined): React.ReactNode {
+  if (typeof value !== 'number') return <>&mdash;</>;
+  return Math.round(value).toLocaleString('en-US');
+}
+
+function formatOptionalCost(value: number | undefined): React.ReactNode {
+  if (typeof value !== 'number') return <>&mdash;</>;
+  return `$${value.toFixed(3)}`;
+}
+
+function formatToolName(name: string): string {
+  const formatted = name.trim().toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+  return formatted || 'unknown_tool';
+}
+
+function getSegmentClass(status: ExecutionStatus): string {
+  if (status === 'failed') return 'bg-[#b83a42]';
+  if (status === 'unknown') return 'bg-[#334155]';
+  return 'bg-[#3569bd]';
+}
+
+function getStepWeight(step: IToolExecution): number {
+  if (step.duration_ms <= 0) return 120;
+  return Math.min(Math.max(step.duration_ms, 180), 5000);
 }

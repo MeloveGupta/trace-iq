@@ -7,7 +7,7 @@ import Sidebar from '@/components/Sidebar';
 import TopNav from '@/components/TopNav';
 import SessionTimeline from '@/components/SessionTimeline';
 import StatusBadge from '@/components/StatusBadge';
-import { formatDuration, truncateId } from '@/lib/utils';
+import { formatDuration } from '@/lib/utils';
 
 export default function SessionPage({ params }: { params: Promise<{ sessionId: string }> }) {
   const { sessionId } = use(params);
@@ -15,7 +15,11 @@ export default function SessionPage({ params }: { params: Promise<{ sessionId: s
   const { sessions, apiKey, isConnected, hydrateFromStorage, fetchLogs } = useTraceStore();
   const [hydrated, setHydrated] = useState(false);
 
-  useEffect(() => { hydrateFromStorage(); setHydrated(true); }, [hydrateFromStorage]);
+  useEffect(() => {
+    hydrateFromStorage();
+    const hydratedTimer = window.setTimeout(() => setHydrated(true), 0);
+    return () => window.clearTimeout(hydratedTimer);
+  }, [hydrateFromStorage]);
   useEffect(() => { if (hydrated && !apiKey && !isConnected) router.push('/'); }, [hydrated, apiKey, isConnected, router]);
   useEffect(() => { if (hydrated && apiKey && sessions.length === 0) fetchLogs(); }, [hydrated, apiKey, sessions.length, fetchLogs]);
 

@@ -10,6 +10,8 @@ export interface IToolExecution {
   started_at: string;
   finished_at: string;
   duration_ms: number;
+  token_count?: number;
+  cost_usd?: number;
   request_payload: Record<string, unknown> | null;
   response_body: Record<string, unknown> | null;
   error_message: string | null;
@@ -24,6 +26,8 @@ export interface ISession {
   session_id: string;
   steps: IToolExecution[];
   total_duration_ms: number;
+  total_tokens?: number;
+  total_cost_usd?: number;
   step_count: number;
   status: ExecutionStatus;
   started_at: string;

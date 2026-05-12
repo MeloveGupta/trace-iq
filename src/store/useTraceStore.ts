@@ -2,7 +2,6 @@
 
 import { create } from 'zustand';
 import type { ISession, IToolExecution, ILogFilter } from '@/types/composio';
-import { groupIntoSessions } from '@/lib/mock-data';
 import { deriveSessionStatus } from '@/lib/utils';
 
 interface TraceState {
@@ -152,12 +151,20 @@ function groupExecutionsIntoSessions(executions: IToolExecution[]): ISession[] {
     const first = sorted[0];
     const last = sorted[sorted.length - 1];
     const toolkitSet = new Set(sorted.map(s => s.toolkit_name));
+    const tokenValues = sorted
+      .map(s => s.token_count)
+      .filter((value): value is number => typeof value === 'number');
+    const costValues = sorted
+      .map(s => s.cost_usd)
+      .filter((value): value is number => typeof value === 'number');
 
     sessions.push({
       session_id,
       steps: sorted,
       total_duration_ms:
         new Date(last.finished_at).getTime() - new Date(first.started_at).getTime(),
+      total_tokens: tokenValues.length ? tokenValues.reduce((acc, value) => acc + value, 0) : undefined,
+      total_cost_usd: costValues.length ? costValues.reduce((acc, value) => acc + value, 0) : undefined,
       step_count: sorted.length,
       status: deriveSessionStatus(sorted),
       started_at: first.started_at,
