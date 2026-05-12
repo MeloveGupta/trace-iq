@@ -3,14 +3,14 @@ import { fetchComposioLogs, ComposioError } from '@/lib/composio';
 import { getMockExecutions } from '@/lib/mock-data';
 
 export async function POST(request: NextRequest) {
-  const isMock = process.env.NEXT_PUBLIC_MOCK_MODE === 'true';
+  const apiKey = request.headers.get('x-composio-key');
+  const isMock = process.env.NEXT_PUBLIC_MOCK_MODE === 'true' && !apiKey;
 
   if (isMock) {
     const executions = getMockExecutions();
     return Response.json({ logs: executions, cursor: null });
   }
 
-  const apiKey = request.headers.get('x-composio-key');
   if (!apiKey) {
     return Response.json({ error: 'API key is required', code: 401 }, { status: 401 });
   }
